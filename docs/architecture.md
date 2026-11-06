@@ -28,22 +28,24 @@ OctoFit Tracker is a three-tier application for a school fitness program. The st
 
 ## Implementation decisions
 
-Record your plan here before editing code.
-
-- Presentation tier decision:
-- Logic tier decision:
-- Data tier decision:
-- Activity tracking approach:
-- Team management approach:
-- Leaderboard approach:
-- Workout suggestions approach:
+- Presentation tier decision: Keep page rendering and user-facing loading, empty, and error states in the React presentation tier. Use the shared API client with relative `/api` paths; do not put database or business rules in components.
+- Logic tier decision: Implement validation and capability behavior in the Express service layer, with routes responsible for HTTP status codes and response envelopes. Return deliberate 4xx responses for invalid or unknown input rather than leaking Mongoose cast/validation errors as 500s.
+- Data tier decision: Keep persistence in Mongoose models and the existing seed script. Require the contract fields, model user/team relationships with ObjectId references, and preserve the seed's idempotent upserts without deleting unrelated records. Do not add authentication in this exercise.
+- Activity tracking approach: Validate the request shape, ID format, and that both referenced records exist before creating an activity. Store the user, team, type, and minutes with a computed point total (one point per minute, consistent with seeded records) and an occurrence timestamp; keep list and create response shapes consistent.
+- Team management approach: Require a non-empty name and mascot, default members to an empty array, and retain submitted member references. Return the same team fields from create and list operations.
+- Leaderboard approach: Aggregate activity points by team, include teams with no activity at zero points, sort by total points descending, and assign ranks starting at 1.
+- Workout suggestions approach: Find the requested user by email, consider their goal and recent activity when selecting matching workouts, and include a concise reason for the leading suggestion. Return a 4xx response if no user matches.
 
 ## Test plan
 
-Record the commands you run and what each failure means.
+Commands run against the starter implementation:
 
-- Data-tier command: `npm run test:data --prefix octofit-tracker/backend`
-- API command: `npm run test:api --prefix octofit-tracker/backend`
-- Frontend command: `npm test --prefix octofit-tracker/frontend`
-- Backend build command: `npm run build --prefix octofit-tracker/backend`
-- Frontend build command: `npm run build --prefix octofit-tracker/frontend`
+| Tier/check | Command | Result | What failures indicate |
+| --- | --- | --- | --- |
+| Data contracts | `npm run test:data --prefix octofit-tracker/backend` | **Failed: 4 failed, 1 passed.** User, team, activity, and workout schema validation checks fail; seed idempotency passes. | Missing required model fields/defaults or a regression in preserving idempotent, non-destructive seeding. |
+| API contracts | `npm run test:api --prefix octofit-tracker/backend` | **Failed: 4 failed.** Invalid activity/team requests return 501 instead of 400, leaderboard is empty, and workout suggestions lack the expected activity-based reason. | Incomplete route/service behavior, invalid-input handling, aggregation, or user-specific recommendation logic. |
+| Frontend contracts | `npm test --prefix octofit-tracker/frontend` | **Failed: 15 failed.** The API-rendering and workout-request checks fail, as do loading, empty, and accessible API-error checks on all four pages. | Missing API wiring or page states/accessibility behavior in the presentation tier. |
+| Backend build | `npm run build --prefix octofit-tracker/backend` | **Passed.** | A failure indicates a TypeScript compile/type error in the backend. |
+| Frontend build | `npm run build --prefix octofit-tracker/frontend` | **Passed.** | A failure indicates a TypeScript or Vite production-build issue in the frontend. |
+
+Implement and verify in dependency order: data contracts first, then API behavior, then presentation behavior. Re-run each focused contract suite after its tier changes, and run both builds to catch cross-tier type/build regressions.
